@@ -7,7 +7,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
-    
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
@@ -152,6 +151,7 @@
         .checkbox-group label { display: flex; align-items: center; gap: 6px; background: var(--card-bg); padding: 5px 12px; border-radius: 40px; border: 1px solid var(--border); cursor: pointer; font-size: 0.8rem; }
         select.btn { background: var(--surface-light); color: var(--text-primary); }
 
+        /* FULLSCREEN HOST MODE */
         .host-fullscreen {
             position: fixed;
             top: 0;
@@ -182,6 +182,7 @@
             cursor: pointer;
         }
 
+        /* HRÁČ - FULLSCREEN */
         .player-view {
             display: none;
             position: fixed;
@@ -325,6 +326,7 @@
             padding: 20px;
         }
         
+        /* RESULTS OVERLAY */
         .results-overlay {
             position: fixed;
             top: 0;
@@ -351,6 +353,7 @@
         }
         .final-score { font-size: 3rem; font-weight: 800; color: var(--accent); margin: 16px 0; }
         
+        /* ROUND RESULTS */
         .round-results {
             position: fixed;
             top: 50%;
@@ -462,7 +465,7 @@
             <div class="options-host" id="fsHostOptions"></div>
         </div>
 
-        <!-- PRESENTER VIEW -->
+        <!-- PRESENTER VIEW (synchrónny s hrou) -->
         <div id="presenterView" class="kahoot-layout" style="display: none;">
             <div class="host-panel" style="flex:1">
                 <h2>📽️ Prezentujúci <button class="btn btn-fullscreen" onclick="togglePresenterFullscreen()" style="margin-left:10px">🖥️ Celá obrazovka</button></h2>
@@ -486,7 +489,7 @@
             <div class="timer-circle" id="presTimer" style="position: absolute; top: 20px; right: 80px;">15</div>
         </div>
 
-        <!-- HRÁČ -->
+        <!-- HRÁČ - FULLSCREEN -->
         <div id="playerView" class="player-view">
             <div id="joinScreen" class="join-card">
                 <h2>🎮 Pripojiť sa</h2>
@@ -539,7 +542,7 @@
             <a href="kviz.html">🎯 Kvíz</a>
             <a href="kahoot.html">🎮 Kahoot</a>
         </div>
-        <p style="margin-top: 8px;">⚙️ Posledný update: 22.4.2026 - 20:58</p>
+        <p style="margin-top: 8px;">⚙️ Posledný update: 22.4.2026 - 21:10</p>
     </footer>
 </div>
 
@@ -2657,7 +2660,6 @@
     let presenterActive = false;
     let presenterGameId = null;
     let presenterTimerInterval = null;
-    let hostQuestions = null;
 
     // ========== SPOLOČNÉ FUNKCIE ==========
     function shuffleArray(arr) {
@@ -2733,6 +2735,8 @@
         currentIndex = 0;
         gameActive = true;
         totalQuestionsCount = currentQuestions.length;
+        currentQuestion = currentQuestions[0];
+        acceptingAnswers = true;
         await database.ref(`games/${gameId}`).update({
             questions: currentQuestions,
             totalQuestions: totalQuestionsCount,
@@ -2742,21 +2746,13 @@
         document.getElementById('startGameBtn').style.display = 'none';
         document.getElementById('endGameBtn').style.display = 'inline-block';
         displayHostQuestion();
-        listenForGameStart();
+        // Listener pre hráčov a prezentujúceho (už beží)
+        listenForGameHost();
     }
 
-    function listenForGameStart() {
-        database.ref(`games/${gameId}/currentQuestion`).on('value', (snap) => {
-            const qData = snap.val();
-            if (qData && gameActive && qData.index !== currentIndex) {
-                if (revealTimer) clearTimeout(revealTimer);
-                currentIndex = qData.index;
-                currentQuestion = qData.question;
-                acceptingAnswers = true;
-                answerSubmitted = false;
-                displayHostQuestion();
-            }
-        });
+    function listenForGameHost() {
+        // Tento listener je len pre to, aby hostiteľ vedel, že niekto iný zmenil otázku? nepotrebujeme, hostiteľ mení sám.
+        // Ale potrebujeme počúvať na koniec otázky (questionDone) pre zobrazenie tlačidla Ďalšia
         database.ref(`games/${gameId}/questionDone`).on('value', (snap) => {
             const done = snap.val();
             if (done && done[currentIndex] === true && gameActive) {
@@ -2774,7 +2770,9 @@
         document.querySelectorAll('.opt-host-btn').forEach(btn => btn.classList.remove('correct-answer'));
         if (revealTimer) clearTimeout(revealTimer);
         questionStartTime = Date.now();
-        revealTimer = setTimeout(() => { if (acceptingAnswers) revealAnswers(); }, 15000);
+        revealTimer = setTimeout(() => {
+            if (acceptingAnswers) revealAnswers();
+        }, 15000);
     }
 
     async function revealAnswers() {
@@ -2804,6 +2802,7 @@
         const btns = document.querySelectorAll('.opt-host-btn');
         q.correct.forEach(c => { if (btns[c]) btns[c].classList.add('correct-answer'); });
         await database.ref(`games/${gameId}/questionDone/${currentIndex}`).set(true);
+        // Zobrazíme výsledky kola (len pre hostiteľa, ale môžeme aj pre všetkých)
         await showRoundResults();
     }
 
@@ -2825,21 +2824,22 @@
     }
 
     async function nextQuestion() {
-        currentIndex++;
-        if (currentIndex >= currentQuestions.length) {
+        // Zavoláme po kliknutí na tlačidlo Ďalšia otázka
+        if (currentIndex + 1 >= currentQuestions.length) {
             endGame();
             return;
         }
+        currentIndex++;
         currentQuestion = currentQuestions[currentIndex];
         acceptingAnswers = true;
         answerSubmitted = false;
-        // Dôležité: najprv vymažeme answers pre novú otázku
+        // Vymažeme odpovede pre novú otázku
         await database.ref(`games/${gameId}/answers/${currentIndex}`).remove();
-        // Potom aktualizujeme currentQuestion – to spustí listenery u hráčov a prezentujúceho
+        // Aktualizujeme currentQuestion v databáze – to spustí listenery u hráčov a prezentujúceho
         await database.ref(`games/${gameId}/currentQuestion`).set({ index: currentIndex, question: currentQuestion });
-        // Zmažeme flag questionDone pre túto otázku (ak náhodou existuje z minula)
-        await database.ref(`games/${gameId}/questionDone/${currentIndex}`).remove();
+        // Skryjeme tlačidlo Ďalšia, kým neskončí táto otázka
         document.getElementById('nextQuestionBtn').style.display = 'none';
+        // Zobrazíme otázku lokálne
         displayHostQuestion();
     }
 
@@ -2881,7 +2881,6 @@
         document.getElementById('presDisconnectBtn').style.display = 'inline-block';
         document.getElementById('presQuestionText').innerHTML = 'Sledovanie hry...';
         
-        // Sleduj aktuálnu otázku
         database.ref(`games/${presenterGameId}/currentQuestion`).on('value', (snap) => {
             const qData = snap.val();
             if (qData && presenterActive) {
@@ -2894,8 +2893,7 @@
             }
         });
         database.ref(`games/${presenterGameId}/questionDone`).on('value', (snap) => {
-            const done = snap.val();
-            if (done && done[playerCurrentIndex] && presenterActive) {
+            if (snap.val() && presenterActive) {
                 if (presenterTimerInterval) clearInterval(presenterTimerInterval);
                 document.getElementById('presTimer').textContent = '✓';
             }
@@ -2917,6 +2915,7 @@
     function togglePresenterFullscreen() {
         const fs = document.getElementById('presFullscreen');
         fs.classList.toggle('active');
+        // Obsah sa aktualizuje už cez listener
     }
     
     document.getElementById('presDisconnectBtn')?.addEventListener('click', () => {

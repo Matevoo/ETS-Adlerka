@@ -216,7 +216,7 @@
                             <option value="20">20 otázok</option>
                         </select>
                         <button class="btn" id="startGameBtn">🚀 Štart hry</button>
-                        <button class="btn" id="nextQuestionBtn" style="display: none;">⏩ Ďalšia</button>
+                        <button class="btn" id="nextQuestionBtn" style="display: none;">⏩ Ďalšia otázka</button>
                         <button class="btn btn-danger" id="endGameBtn" style="display: none;">🏁 Ukončiť</button>
                     </div>
                 </div>
@@ -262,7 +262,7 @@
 </div>
 
 <script>
-    // ========== FIREBASE KONFIGURÁCIA (TU ZADAJ SVOJU URL) ==========
+    // ========== FIREBASE KONFIGURÁCIA ==========
     const firebaseConfig = {
         databaseURL: "https://eltec-fejkhoot-default-rtdb.europe-west1.firebasedatabase.app/"
     };
@@ -2370,6 +2370,8 @@
     let isMultiChoice = false;
     let answerSubmitted = false;
     let revealTimer = null;
+    let playerQuestionActive = false;
+    let playerCurrentIndex = -1;
 
     // ========== FUNKCIE ==========
     function selectRole(r) {
@@ -2394,6 +2396,8 @@
         database.ref(`games/${gameId}/currentQuestion`).on('value', (snap) => {
             const qData = snap.val();
             if (qData && gameActive && qData.index !== currentIndex) {
+                // Ukonči aktuálnu otázku
+                if (revealTimer) clearTimeout(revealTimer);
                 currentIndex = qData.index;
                 currentQuestion = qData.question;
                 acceptingAnswers = true;
@@ -2437,6 +2441,7 @@
         currentIndex = 0;
         gameActive = true;
         currentQuestion = currentQuestions[0];
+        acceptingAnswers = true;
         
         await database.ref(`games/${gameId}`).set({
             players: {},
@@ -2447,6 +2452,7 @@
         
         document.getElementById('startGameBtn').style.display = 'none';
         document.getElementById('endGameBtn').style.display = 'inline-block';
+        document.getElementById('nextQuestionBtn').style.display = 'none';
         displayHostQuestion();
     }
 
@@ -2460,6 +2466,9 @@
         });
         document.getElementById('hostOptions').innerHTML = html;
         
+        // Odstráň zvýraznenie z predchádzajúcej otázky
+        document.querySelectorAll('.opt-host-btn').forEach(btn => btn.classList.remove('correct-answer'));
+        
         if (revealTimer) clearTimeout(revealTimer);
         revealTimer = setTimeout(() => {
             if (acceptingAnswers) revealAnswers();
@@ -2471,12 +2480,16 @@
         acceptingAnswers = false;
         const q = currentQuestion;
         const isMulti = q.type === 'multi';
+        
+        // Získaj odpovede hráčov
         const answersSnap = await database.ref(`games/${gameId}/answers/${currentIndex}`).once('value');
         const answers = answersSnap.val() || {};
         
+        // Zvýrazni správne odpovede pre hostiteľa
         const btns = document.querySelectorAll('.opt-host-btn');
         q.correct.forEach(c => { if (btns[c]) btns[c].classList.add('correct-answer'); });
         
+        // Spočítaj body
         for (const [pid, ansData] of Object.entries(answers)) {
             const player = players[pid];
             if (!player) continue;
@@ -2493,6 +2506,11 @@
             const newScore = (player.score || 0) + points;
             await database.ref(`games/${gameId}/players/${pid}/score`).set(newScore);
         }
+        
+        // Ulož že táto otázka je hotová
+        await database.ref(`games/${gameId}/questionDone/${currentIndex}`).set(true);
+        
+        // Zobraz tlačidlo pre ďalšiu otázku
         document.getElementById('nextQuestionBtn').style.display = 'inline-block';
     }
 
@@ -2505,7 +2523,11 @@
         currentQuestion = currentQuestions[currentIndex];
         acceptingAnswers = true;
         answerSubmitted = false;
+        
+        // Vymaž odpovede pre novú otázku
+        await database.ref(`games/${gameId}/answers/${currentIndex}`).remove();
         await database.ref(`games/${gameId}/currentQuestion`).set({ index: currentIndex, question: currentQuestion });
+        
         document.getElementById('nextQuestionBtn').style.display = 'none';
         displayHostQuestion();
     }
@@ -2545,14 +2567,38 @@
     });
 
     function listenForGame() {
+        // Sleduj aktuálnu otázku
         database.ref(`games/${gameId}/currentQuestion`).on('value', (snap) => {
             const qData = snap.val();
             if (qData) {
-                document.getElementById('waitingMessage').style.display = 'none';
-                document.getElementById('questionScreen').style.display = 'block';
-                currentQuestion = qData.question;
-                isMultiChoice = currentQuestion.type === 'multi';
-                displayPlayerQuestion();
+                // Ak je to nová otázka, resetni stav
+                if (playerCurrentIndex !== qData.index) {
+                    playerCurrentIndex = qData.index;
+                    currentQuestion = qData.question;
+                    isMultiChoice = currentQuestion.type === 'multi';
+                    acceptingAnswers = true;
+                    answerSubmitted = false;
+                    myAnswers = [];
+                    playerQuestionActive = true;
+                    
+                    // Zobraz otázku
+                    document.getElementById('waitingMessage').style.display = 'none';
+                    document.getElementById('questionScreen').style.display = 'block';
+                    document.getElementById('playerFeedback').innerHTML = '';
+                    displayPlayerQuestion();
+                }
+            }
+        });
+        
+        // Sleduj kedy sa otázka skončila (aby hráč vedel čakať na ďalšiu)
+        database.ref(`games/${gameId}/questionDone`).on('value', (snap) => {
+            const done = snap.val();
+            if (done && done[playerCurrentIndex] === true && playerQuestionActive) {
+                // Táto otázka je hotová, prepni do čakacieho režimu
+                playerQuestionActive = false;
+                document.getElementById('questionScreen').style.display = 'none';
+                document.getElementById('waitingMessage').style.display = 'block';
+                document.getElementById('waitingMessage').innerHTML = '<h3>⏳ Čakáme na ďalšiu otázku...</h3><p>Hostiteľ čoskoro spustí ďalšiu</p>';
             }
         });
     }
@@ -2560,21 +2606,39 @@
     function displayPlayerQuestion() {
         document.getElementById('playerQuestionText').innerHTML = currentQuestion.question;
         const container = document.getElementById('playerOptions');
-        myAnswers = [];
-        answerSubmitted = false;
         let html = '';
-        currentQuestion.options.forEach((opt, i) => {
-            const letter = String.fromCharCode(65+i);
-            if (isMultiChoice) {
-                html += `<button class="player-opt" data-ans="${i}" style="background:var(--surface); border:2px solid var(--border); color:var(--text-primary); padding:20px; font-size:1rem;">${letter}) ${opt}</button>`;
-            } else {
-                const colorClass = `opt-${letter.toLowerCase()}`;
-                html += `<button class="player-opt ${colorClass}" data-ans="${i}">${letter}) ${opt}</button>`;
-            }
-        });
-        container.innerHTML = html;
         
         if (isMultiChoice) {
+            currentQuestion.options.forEach((opt, i) => {
+                const letter = String.fromCharCode(65+i);
+                html += `<button class="player-opt" data-ans="${i}" style="background:var(--surface); border:2px solid var(--border); color:var(--text-primary); padding:20px; font-size:1rem;">${letter}) ${opt}</button>`;
+            });
+            container.innerHTML = html;
+            
+            // Odstráň starý submit button ak existuje
+            const oldBtn = document.getElementById('multiSubmitBtn');
+            if (oldBtn) oldBtn.remove();
+            
+            const submitBtn = document.createElement('button');
+            submitBtn.id = 'multiSubmitBtn';
+            submitBtn.textContent = '✅ Odoslať odpoveď';
+            submitBtn.className = 'btn';
+            submitBtn.style.width = '100%';
+            submitBtn.style.marginTop = '16px';
+            submitBtn.onclick = async () => {
+                if (!acceptingAnswers) { document.getElementById('playerFeedback').innerHTML = '⏰ Už neskoro!'; return; }
+                if (answerSubmitted) return;
+                if (myAnswers.length === 0) { alert('Vyber aspoň jednu odpoveď!'); return; }
+                answerSubmitted = true;
+                await database.ref(`games/${gameId}/answers/${playerCurrentIndex}/${playerId}`).set({ answers: myAnswers });
+                document.getElementById('playerFeedback').innerHTML = '✅ Odpoveď zaznamenaná!';
+                document.querySelectorAll('.player-opt').forEach(btn => btn.style.opacity = '0.5');
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.5';
+            };
+            container.parentNode.appendChild(submitBtn);
+            
+            // Eventy pre výber odpovedí
             document.querySelectorAll('.player-opt').forEach(btn => {
                 btn.onclick = () => {
                     if (!acceptingAnswers) return;
@@ -2592,36 +2656,27 @@
                     }
                 };
             });
-            const submitBtn = document.createElement('button');
-            submitBtn.textContent = '✅ Odoslať odpoveď';
-            submitBtn.className = 'btn';
-            submitBtn.style.width = '100%';
-            submitBtn.style.marginTop = '16px';
-            submitBtn.onclick = () => {
-                if (!acceptingAnswers) { document.getElementById('playerFeedback').innerHTML = '⏰ Už neskoro!'; return; }
-                if (answerSubmitted) return;
-                if (myAnswers.length === 0) { alert('Vyber aspoň jednu odpoveď!'); return; }
-                submitAnswer(myAnswers);
-            };
-            container.parentNode.appendChild(submitBtn);
         } else {
+            // Single choice
+            currentQuestion.options.forEach((opt, i) => {
+                const letter = String.fromCharCode(65+i);
+                const colorClass = `opt-${letter.toLowerCase()}`;
+                html += `<button class="player-opt ${colorClass}" data-ans="${i}">${letter}) ${opt}</button>`;
+            });
+            container.innerHTML = html;
+            
             document.querySelectorAll('.player-opt').forEach(btn => {
-                btn.onclick = () => {
+                btn.onclick = async () => {
                     if (!acceptingAnswers) { document.getElementById('playerFeedback').innerHTML = '⏰ Už neskoro!'; return; }
                     if (answerSubmitted) return;
-                    submitAnswer(parseInt(btn.dataset.ans));
+                    answerSubmitted = true;
+                    const answer = parseInt(btn.dataset.ans);
+                    await database.ref(`games/${gameId}/answers/${playerCurrentIndex}/${playerId}`).set({ answer: answer });
+                    document.getElementById('playerFeedback').innerHTML = '✅ Odpoveď zaznamenaná!';
+                    document.querySelectorAll('.player-opt').forEach(b => b.style.opacity = '0.5');
                 };
             });
         }
-    }
-    
-    async function submitAnswer(answer) {
-        if (!acceptingAnswers || answerSubmitted) return;
-        answerSubmitted = true;
-        const answerData = isMultiChoice ? { answers: answer } : { answer: answer };
-        await database.ref(`games/${gameId}/answers/${currentIndex}/${playerId}`).set(answerData);
-        document.getElementById('playerFeedback').innerHTML = '✅ Odpoveď zaznamenaná!';
-        document.querySelectorAll('.player-opt').forEach(btn => btn.style.opacity = '0.5');
     }
 
     function toggleTheme() {

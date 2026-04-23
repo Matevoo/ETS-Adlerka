@@ -71,7 +71,7 @@
 
 <svelte:head><title>{cfg.name} | ELTEC</title></svelte:head>
 
-<div class="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+<div class="min-h-screen flex flex-col">
   <!-- Header -->
   <div class="bg-slate-800 border-b border-slate-700/50 px-5 py-3 flex justify-between items-center gap-4 flex-wrap">
     <div>

@@ -219,7 +219,7 @@
 
 <svelte:head><title>🎮 Fejkhoot | ELTEC</title></svelte:head>
 
-<div class="min-h-screen bg-slate-950 text-slate-100">
+<div class="min-h-screen ">
   <Nav>
     <h1 class="text-3xl font-extrabold bg-gradient-to-r from-slate-100 to-blue-400 bg-clip-text text-transparent mb-1">🎮 Fejkhoot</h1>
     <p class="text-slate-400 text-sm">Multiplayer kvíz — hosť, prezentujúci, hráč</p>

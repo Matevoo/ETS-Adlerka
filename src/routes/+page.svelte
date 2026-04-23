@@ -19,7 +19,7 @@
 
 <div class="min-h-screen">
   <Nav>
-    <h1 class="text-4xl font-extrabold bg-gradient-to-r from-slate-100 to-blue-400 bg-clip-text text-transparent mb-1">⚡ ELTEC</h1>
+    <h1 class="text-4xl font-extrabold mb-1 animated-title">⚡ ELTEC</h1>
     <p class="text-slate-400 text-sm">Príprava na skúšky podľa Vyhlášky č. 508/2009 Z.z.</p>
   </Nav>
 
@@ -96,3 +96,19 @@
     </div>
   </div>
 {/if}
+
+<style>
+  .animated-title {
+    background: linear-gradient(90deg, #f1f5f9, #60a5fa, #818cf8, #60a5fa, #f1f5f9);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 4s linear infinite;
+  }
+
+  @keyframes shimmer {
+    0%   { background-position: 0% center; }
+    100% { background-position: 200% center; }
+  }
+</style>

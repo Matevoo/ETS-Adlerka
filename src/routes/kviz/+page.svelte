@@ -2,7 +2,7 @@
   import Nav from '$lib/Nav.svelte';
   import { loadQuestions, META, shuffle, checkAnswer } from '$lib/questions.js';
 
-  let phase = 'setup'; // setup | quiz | results
+  let phase = 'setup';
   let selTest = 'A', selCount = 10;
   let questions = [], answers = [], statuses = [], idx = 0;
 
@@ -18,28 +18,29 @@
   $: checked = statuses[idx];
   $: isLast = idx === questions.length - 1;
 
+  // answers[idx] is always null | number[] for consistency with checkAnswer
   function pick(oi) {
     if (checked !== null) return;
     if (q.type === 'multi') {
-      const cur = Array.isArray(answers[idx]) ? [...answers[idx]] : [];
-      const i = cur.indexOf(oi); i === -1 ? cur.push(oi) : cur.splice(i, 1);
+      const cur = answers[idx] ? [...answers[idx]] : [];
+      const i = cur.indexOf(oi);
+      i === -1 ? cur.push(oi) : cur.splice(i, 1);
       answers[idx] = cur.length ? cur : null;
     } else {
-      answers[idx] = oi;
+      answers[idx] = [oi];
     }
     answers = [...answers];
   }
 
   function sel(oi) {
-    const a = answers[idx];
-    return Array.isArray(a) ? a.includes(oi) : a === oi;
+    return answers[idx]?.includes(oi) ?? false;
   }
 
   function check() {
-    if (checked !== null) return alert('Už skontrolované!');
+    if (checked !== null) return;
     const a = answers[idx];
-    if (a === null || (Array.isArray(a) && !a.length)) return alert('Najprv označ odpoveď!');
-    statuses[idx] = checkAnswer(q, Array.isArray(a) ? a : [a]);
+    if (!a?.length) return alert('Najprv označ odpoveď!');
+    statuses[idx] = checkAnswer(q, a);
     statuses = [...statuses];
   }
 
@@ -54,17 +55,17 @@
   }
 
   function letter(a) {
-    if (a === null || a === undefined) return '—';
-    return Array.isArray(a) ? a.map(x => String.fromCharCode(65+x)).join(', ') : String.fromCharCode(65+a);
+    if (!a?.length) return '—';
+    return a.map(x => String.fromCharCode(65 + x)).join(', ');
   }
 
   $: correctCount = statuses.filter(Boolean).length;
-  $: pct = questions.length ? Math.round(correctCount/questions.length*100) : 0;
+  $: pct = questions.length ? Math.round(correctCount / questions.length * 100) : 0;
 </script>
 
 <svelte:head><title>🎯 Kvíz | ELTEC</title></svelte:head>
 
-<div class="min-h-screen bg-slate-950 text-slate-100">
+<div class="min-h-screen">
   <Nav>
     <h1 class="text-3xl font-extrabold bg-gradient-to-r from-slate-100 to-blue-400 bg-clip-text text-transparent mb-1">🎯 Strel odpoveď!</h1>
     <p class="text-slate-400 text-sm">Označ odpovede a klikni Skontrolovať</p>
@@ -99,7 +100,7 @@
     <!-- Quiz -->
     {:else if phase === 'quiz' && q}
       <div class="h-1 bg-slate-800 rounded-full mb-5 overflow-hidden">
-        <div class="h-full bg-emerald-500 transition-all rounded-full" style="width:{idx/questions.length*100}%"></div>
+        <div class="h-full bg-emerald-500 transition-all rounded-full" style="width:{(idx+1)/questions.length*100}%"></div>
       </div>
 
       <div class="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-6 mb-4">
@@ -111,36 +112,36 @@
 
         <div class="space-y-2">
           {#each q.options as opt, oi}
-            <div on:click={() => pick(oi)} role="button" tabindex="0" on:keydown={e=>e.key==='Enter'&&pick(oi)}
+            <div on:click={() => pick(oi)} role="button" tabindex="0"
+              on:keydown={e => e.key === 'Enter' && pick(oi)}
               class="flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all text-sm
-                {checked !== null && q.correct.includes(oi) ? 'bg-emerald-500/20 border-emerald-500'
-                : checked !== null && sel(oi) && !q.correct.includes(oi) ? 'bg-red-500/20 border-red-500'
-                : sel(oi) ? 'bg-blue-500/20 border-blue-500'
+                {checked !== null && q.correct.includes(oi)   ? 'bg-emerald-500/20 border-emerald-500'
+                : checked !== null && sel(oi)                  ? 'bg-red-500/20 border-red-500'
+                : sel(oi)                                      ? 'bg-blue-500/20 border-blue-500'
                 : 'bg-slate-700/40 border-slate-600/40 hover:border-slate-500'}">
               {#if q.type === 'multi'}
                 <span class="w-5 h-5 rounded border-2 flex items-center justify-center text-xs font-bold flex-shrink-0
-                  {sel(oi) ? 'bg-blue-500 border-blue-500' : 'border-slate-500'}">
-                  {sel(oi)?'✓':''}
+                  {sel(oi) ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-500'}">
+                  {sel(oi) ? '✓' : ''}
                 </span>
               {:else}
                 <span class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0
-                  {sel(oi) ? 'bg-blue-500' : 'bg-slate-600'}">
-                  {String.fromCharCode(65+oi)}
+                  {sel(oi) ? 'bg-blue-500 text-white' : 'bg-slate-600'}">
+                  {String.fromCharCode(65 + oi)}
                 </span>
               {/if}
-              <span>{String.fromCharCode(65+oi)}) {opt}</span>
+              <span>{String.fromCharCode(65 + oi)}) {opt}</span>
             </div>
           {/each}
         </div>
 
-        <!-- Feedback -->
         {#if checked !== null}
           <div class="mt-4 rounded-xl p-4 border-l-4 {checked ? 'bg-emerald-500/10 border-emerald-500' : 'bg-red-500/10 border-red-500'}">
-            <p class="font-bold {checked ? 'text-emerald-400' : 'text-red-400'}">{checked?'✓ Správne!':'✗ Nesprávne'}</p>
+            <p class="font-bold {checked ? 'text-emerald-400' : 'text-red-400'}">{checked ? '✓ Správne!' : '✗ Nesprávne'}</p>
             <p class="text-sm text-slate-400 mt-1">Tvoja: {letter(answers[idx])}</p>
             {#if !checked}
               <p class="text-sm text-emerald-400 mt-0.5">
-                Správna: {q.correct.map(c=>String.fromCharCode(65+c)).join(', ')}) {q.correct.map(c=>q.options[c]).join('; ')}
+                Správna: {q.correct.map(c => String.fromCharCode(65+c)).join(', ')}) {q.correct.map(c => q.options[c]).join('; ')}
               </p>
             {/if}
           </div>
@@ -148,7 +149,7 @@
       </div>
 
       <div class="flex gap-2.5 flex-wrap">
-        <button on:click={() => idx--} disabled={idx===0}
+        <button on:click={() => idx--} disabled={idx === 0}
           class="flex-1 py-2.5 rounded-full font-semibold bg-slate-700 hover:bg-slate-600 disabled:opacity-40 transition-colors">
           ◀ Späť
         </button>
@@ -184,10 +185,10 @@
       </div>
       <div class="space-y-2.5">
         {#each questions as qr, i}
-          <div class="rounded-xl p-3.5 bg-slate-800/60 border-l-4 {statuses[i]?'border-emerald-500':'border-red-500'}">
+          <div class="rounded-xl p-3.5 bg-slate-800/60 border-l-4 {statuses[i] ? 'border-emerald-500' : 'border-red-500'}">
             <p class="font-semibold text-sm">{i+1}. {qr.question}</p>
             <p class="text-xs text-slate-400 mt-1">Tvoja: {letter(answers[i])}</p>
-            <p class="text-xs text-emerald-400">Správna: {qr.correct.map(c=>String.fromCharCode(65+c)).join(', ')}</p>
+            <p class="text-xs text-emerald-400">Správna: {qr.correct.map(c => String.fromCharCode(65+c)).join(', ')}</p>
           </div>
         {/each}
       </div>

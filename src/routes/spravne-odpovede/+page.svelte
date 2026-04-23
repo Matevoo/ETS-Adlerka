@@ -14,7 +14,7 @@
     { name: '📗 Zhrnutie B',   url: '/data/Zhrnutie-B.pdf' },
     { name: '📕 Zhrnutie C',   url: '/data/Zhrnutie-C.pdf' },
     { name: '📙 Zhrnutie D',   url: '/data/Zhrnutie-D.pdf' },
-    { name: '📓 Legislatíva',  url: '/data/Zhrnutie-leg.pdf' },
+    { name: '📓 Legislatíva',  url: '/data/Zhrnutie-LEG.pdf' },
   ];
 
   onMount(async () => {

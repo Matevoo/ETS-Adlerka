@@ -1,10 +1,4 @@
-// =====================================================================
-// questions.js — Databáza všetkých otázok (ELTEC Certifikačný systém)
-// Jeden zdieľaný zdroj pre index.html, kviz.html, spravne_odpovede.html,
-// fejkhoot.html — neupravuj duplicitne vo viacerých súboroch!
-// =====================================================================
-
-const questionsDatabase = {
+export const questionsDatabase = {
             'A': [
                     {
                         id: "A_1", chapter: "A",
@@ -2089,3 +2083,12 @@ const questionsDatabase = {
                     }
                 ]
         };
+
+export const testConfigs = {
+  A:   { name: 'Test A — Elektrotechnické merania', time: 40, desc: 'Elektrotechnické merania, ochranné opatrenia, bleskozvody, izolácia, uzemnenie' },
+  B:   { name: 'Test B — Ochranné opatrenia',       time: 35, desc: 'Meranie a skúšanie ochrany, ochranné vodiče, uzemnenie, siete TT, TN, chrániče' },
+  C:   { name: 'Test C — Bezpečnosť práce',         time: 50, desc: 'Bezpečnostné predpisy, PPN, príkazy B, B-PPN, ochranné pomôcky, vonkajšie vplyvy' },
+  D:   { name: 'Test D — Prvá pomoc',               time: 25, desc: 'Úrazy elektrickým prúdom, oživovanie, krvácanie, popáleniny, stabilizovaná poloha' },
+  LEG: { name: 'Test Legislatíva',                  time: 50, desc: 'Vyhláška 508/2009, TI, IBP, odborná spôsobilosť, skúšky, dokumentácia, prevádzka' },
+  MIX: { name: 'Zmiešaný test',                     time: 45, desc: 'Zmiešané otázky zo všetkých testov' }
+};

@@ -17,7 +17,7 @@
       const time = +p.get('time') || 45;
       const count = +p.get('count') || 30;
       const db = await loadAll(keys);
-      let all = keys.flatMap(k => db[k] ?? []);
+      const all = keys.flatMap(k => db[k] ?? []);
       questions = shuffle(all).slice(0, Math.min(count, all.length));
       cfg = { name: 'Zmiešaný test', desc: `${questions.length} otázok — ${keys.join(', ')}`, time };
     } else {
@@ -36,19 +36,24 @@
   $: secs = String(timeLeft % 60).padStart(2, '0');
   $: progress = answers.filter(a => a !== null).length / (questions.length || 1) * 100;
   $: q = questions[idx];
+  // Reaktívna závislosť — prerendruje sa vždy keď sa zmení answers alebo idx
+  $: curAns = answers[idx];
+
+  function isSelected(oi) {
+    return Array.isArray(curAns) ? curAns.includes(oi) : false;
+  }
 
   function pick(oi) {
     if (q.type === 'single') {
       answers[idx] = [oi];
     } else {
       const cur = answers[idx] ? [...answers[idx]] : [];
-      const i = cur.indexOf(oi); i === -1 ? cur.push(oi) : cur.splice(i, 1);
+      const i = cur.indexOf(oi);
+      i === -1 ? cur.push(oi) : cur.splice(i, 1);
       answers[idx] = cur.length ? cur : null;
     }
     answers = [...answers];
   }
-
-  function sel(oi) { return answers[idx]?.includes(oi) ?? false; }
 
   function submit() {
     clearInterval(timer);
@@ -57,16 +62,16 @@
       const ans = answers[i] ?? [];
       const ok = checkAnswer(q, ans);
       if (ok) score++;
-      return { question: q.question, ok,
+      return {
+        question: q.question, ok,
         user: ans.length ? ans.map(a => String.fromCharCode(65+a)).join(', ') : '—',
         correct: q.correct.map(c => String.fromCharCode(65+c)).join(', '),
-        correctText: q.correct.map(c => q.options[c]).join('; ') };
+        correctText: q.correct.map(c => q.options[c]).join('; ')
+      };
     });
     results = { score, total: questions.length, pct: Math.round(score/questions.length*100), details };
     done = true;
   }
-
-  function restart() { done = false; results = null; onMount; location.reload(); }
 </script>
 
 <svelte:head><title>{cfg.name} | ELTEC</title></svelte:head>
@@ -78,21 +83,25 @@
       <h2 class="font-bold text-lg">{cfg.name}</h2>
       <p class="text-slate-400 text-xs">{cfg.desc}</p>
     </div>
-    <span class="font-mono text-xl font-bold px-5 py-1.5 rounded-full border
-      {timeLeft <= 60 ? 'text-red-400 border-red-500/40 animate-pulse' : 'text-amber-400 border-amber-500/30'}">
+    <span class="font-mono text-xl font-bold px-5 py-1.5 rounded-full border"
+      class:timer-urgent={timeLeft <= 60}
+      class:timer-normal={timeLeft > 60}>
       {mins}:{secs}
     </span>
   </div>
 
   <!-- Progress -->
-  <div class="h-1 bg-slate-800"><div class="h-full bg-emerald-500 transition-all" style="width:{progress}%"></div></div>
+  <div class="h-1 bg-slate-800">
+    <div class="h-full bg-emerald-500 transition-all" style="width:{progress}%"></div>
+  </div>
 
   <!-- Nav dots -->
   <div class="flex flex-wrap gap-1.5 px-5 py-3 bg-slate-800/40 border-b border-slate-700/30">
     {#each questions as _, i}
       <button on:click={() => idx=i}
-        class="w-9 h-9 rounded-xl text-xs font-bold transition-all
-          {i===idx ? 'bg-blue-500 scale-110' : answers[i] ? 'bg-emerald-500' : 'bg-slate-700 hover:bg-slate-600'}">
+        class="dot-btn"
+        class:dot-active={i===idx}
+        class:dot-answered={answers[i] && i!==idx}>
         {i+1}
       </button>
     {/each}
@@ -111,11 +120,13 @@
 
       <div class="space-y-2.5 mb-8">
         {#each q.options as opt, oi}
-          <div on:click={() => pick(oi)} role="button" tabindex="0" on:keydown={e=>e.key==='Enter'&&pick(oi)}
-            class="flex items-center gap-3 px-5 py-4 rounded-2xl border cursor-pointer transition-all
-              {sel(oi) ? 'bg-blue-500/20 border-blue-500' : 'bg-slate-800/60 border-slate-700/50 hover:border-slate-500 hover:translate-x-1'}">
-            <input type={q.type==='single'?'radio':'checkbox'} checked={sel(oi)}
-              on:click|stopPropagation={() => pick(oi)} class="w-4 h-4 accent-blue-500 flex-shrink-0" />
+          {@const picked = isSelected(oi)}
+          <div on:click={() => pick(oi)} role="button" tabindex="0"
+            on:keydown={e => e.key==='Enter' && pick(oi)}
+            class="opt-row" class:opt-selected={picked}>
+            <input type={q.type==='single'?'radio':'checkbox'} checked={picked}
+              on:click|stopPropagation={() => pick(oi)}
+              class="w-4 h-4 accent-blue-500 flex-shrink-0" />
             <span class="font-medium text-sm">{String.fromCharCode(65+oi)}) {opt}</span>
           </div>
         {/each}
@@ -151,7 +162,6 @@
         <button on:click={() => goto('/')} class="text-slate-400 hover:text-red-400 text-2xl leading-none">×</button>
       </div>
       <div class="overflow-y-auto p-7">
-        <!-- Circle -->
         <div class="flex flex-col items-center mb-7">
           <div class="relative w-32 h-32 mb-3">
             <svg class="w-full h-full -rotate-90" viewBox="0 0 100 100">
@@ -170,12 +180,14 @@
           <p class="text-slate-400 text-sm mt-1">Úspešnosť: <strong class="text-slate-200">{results.pct}%</strong></p>
         </div>
 
-        <!-- Details -->
         <div class="space-y-2.5 mb-6">
           {#each results.details as d, i}
-            <div class="rounded-xl p-3.5 bg-slate-700/40 border-l-4 {d.ok ? 'border-emerald-500' : 'border-red-500'}">
+            <div class="rounded-xl p-3.5 bg-slate-700/40 border-l-4"
+              class:border-emerald-500={d.ok} class:border-red-500={!d.ok}>
               <p class="font-semibold text-sm">{i+1}. {d.question}</p>
-              <p class="text-xs mt-1 {d.ok ? 'text-emerald-400' : 'text-red-400'}">{d.ok?'✓':'✗'} Vaša: {d.user}</p>
+              <p class="text-xs mt-1" class:text-emerald-400={d.ok} class:text-red-400={!d.ok}>
+                {d.ok?'✓':'✗'} Vaša: {d.user}
+              </p>
               {#if !d.ok}<p class="text-xs text-slate-400">Správna: {d.correct}) {d.correctText}</p>{/if}
             </div>
           {/each}
@@ -195,3 +207,40 @@
     </div>
   </div>
 {/if}
+
+<style>
+  .opt-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-radius: 16px;
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    background: rgba(30, 41, 59, 0.6);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  }
+  .opt-row:hover { border-color: #64748b; transform: translateX(4px); }
+  .opt-selected {
+    background: rgba(59, 130, 246, 0.2) !important;
+    border-color: #3b82f6 !important;
+    transform: translateX(4px);
+  }
+
+  .dot-btn {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    font-size: 12px; font-weight: bold;
+    background: #334155;
+    color: #cbd5e1;
+    transition: all 0.15s;
+    border: none; cursor: pointer;
+  }
+  .dot-btn:hover { background: #475569; }
+  .dot-active  { background: #3b82f6 !important; color: white !important; transform: scale(1.1); }
+  .dot-answered { background: #10b981 !important; color: white !important; }
+
+  .timer-normal { color: #fbbf24; border-color: rgba(245,158,11,0.3); }
+  .timer-urgent { color: #f87171; border-color: rgba(239,68,68,0.4); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.5 } }
+</style>

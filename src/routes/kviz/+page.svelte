@@ -17,12 +17,17 @@
   $: q = questions[idx];
   $: checked = statuses[idx];
   $: isLast = idx === questions.length - 1;
+  // Reaktívna závislosť na answers AJ idx — Svelte vždy prerendruje pri zmene
+  $: curAns = answers[idx];
 
-  // answers[idx] is always null | number[] for consistency with checkAnswer
+  function isSelected(oi) {
+    return Array.isArray(curAns) ? curAns.includes(oi) : false;
+  }
+
   function pick(oi) {
     if (checked !== null) return;
     if (q.type === 'multi') {
-      const cur = answers[idx] ? [...answers[idx]] : [];
+      const cur = Array.isArray(curAns) ? [...curAns] : [];
       const i = cur.indexOf(oi);
       i === -1 ? cur.push(oi) : cur.splice(i, 1);
       answers[idx] = cur.length ? cur : null;
@@ -32,15 +37,10 @@
     answers = [...answers];
   }
 
-  function sel(oi) {
-    return answers[idx]?.includes(oi) ?? false;
-  }
-
   function check() {
     if (checked !== null) return;
-    const a = answers[idx];
-    if (!a?.length) return alert('Najprv označ odpoveď!');
-    statuses[idx] = checkAnswer(q, a);
+    if (!curAns?.length) return alert('Najprv označ odpoveď!');
+    statuses[idx] = checkAnswer(q, curAns);
     statuses = [...statuses];
   }
 
@@ -67,7 +67,7 @@
 
 <div class="min-h-screen">
   <Nav>
-    <h1 class="text-3xl font-extrabold bg-gradient-to-r from-slate-100 to-blue-400 bg-clip-text text-transparent mb-1">🎯 Strel odpoveď!</h1>
+    <h1 class="text-3xl font-extrabold animated-title mb-1">🎯 Strel odpoveď!</h1>
     <p class="text-slate-400 text-sm">Označ odpovede a klikni Skontrolovať</p>
   </Nav>
 
@@ -112,32 +112,34 @@
 
         <div class="space-y-2">
           {#each q.options as opt, oi}
+            {@const picked = isSelected(oi)}
+            {@const correct = checked !== null && q.correct.includes(oi)}
+            {@const wrong = checked !== null && picked && !q.correct.includes(oi)}
             <div on:click={() => pick(oi)} role="button" tabindex="0"
               on:keydown={e => e.key === 'Enter' && pick(oi)}
-              class="flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all text-sm
-                {checked !== null && q.correct.includes(oi)   ? 'bg-emerald-500/20 border-emerald-500'
-                : checked !== null && sel(oi)                  ? 'bg-red-500/20 border-red-500'
-                : sel(oi)                                      ? 'bg-blue-500/20 border-blue-500'
-                : 'bg-slate-700/40 border-slate-600/40 hover:border-slate-500'}">
+              class="opt-row"
+              class:opt-correct={correct}
+              class:opt-wrong={wrong}
+              class:opt-selected={picked && checked === null}>
               {#if q.type === 'multi'}
-                <span class="w-5 h-5 rounded border-2 flex items-center justify-center text-xs font-bold flex-shrink-0
-                  {sel(oi) ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-500'}">
-                  {sel(oi) ? '✓' : ''}
+                <span class="checkbox" class:checkbox-on={picked}>
+                  {picked ? '✓' : ''}
                 </span>
               {:else}
-                <span class="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0
-                  {sel(oi) ? 'bg-blue-500 text-white' : 'bg-slate-600'}">
+                <span class="radio-btn" class:radio-on={picked}>
                   {String.fromCharCode(65 + oi)}
                 </span>
               {/if}
-              <span>{String.fromCharCode(65 + oi)}) {opt}</span>
+              <span class="text-sm">{String.fromCharCode(65 + oi)}) {opt}</span>
             </div>
           {/each}
         </div>
 
         {#if checked !== null}
-          <div class="mt-4 rounded-xl p-4 border-l-4 {checked ? 'bg-emerald-500/10 border-emerald-500' : 'bg-red-500/10 border-red-500'}">
-            <p class="font-bold {checked ? 'text-emerald-400' : 'text-red-400'}">{checked ? '✓ Správne!' : '✗ Nesprávne'}</p>
+          <div class="mt-4 rounded-xl p-4 border-l-4" class:result-ok={checked} class:result-fail={!checked}>
+            <p class="font-bold" class:text-emerald-400={checked} class:text-red-400={!checked}>
+              {checked ? '✓ Správne!' : '✗ Nesprávne'}
+            </p>
             <p class="text-sm text-slate-400 mt-1">Tvoja: {letter(answers[idx])}</p>
             {#if !checked}
               <p class="text-sm text-emerald-400 mt-0.5">
@@ -164,7 +166,7 @@
           </button>
         {:else if checked !== null}
           <button on:click={finish}
-            class="flex-1 py-2.5 rounded-full font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-colors">
+            class="flex-1 py-2.5 rounded-full font-semibond bg-emerald-500 hover:bg-emerald-600 text-white transition-colors">
             🏁 Ukončiť
           </button>
         {/if}
@@ -185,7 +187,7 @@
       </div>
       <div class="space-y-2.5">
         {#each questions as qr, i}
-          <div class="rounded-xl p-3.5 bg-slate-800/60 border-l-4 {statuses[i] ? 'border-emerald-500' : 'border-red-500'}">
+          <div class="rounded-xl p-3.5 bg-slate-800/60 border-l-4" class:border-emerald-500={statuses[i]} class:border-red-500={!statuses[i]}>
             <p class="font-semibold text-sm">{i+1}. {qr.question}</p>
             <p class="text-xs text-slate-400 mt-1">Tvoja: {letter(answers[i])}</p>
             <p class="text-xs text-emerald-400">Správna: {qr.correct.map(c => String.fromCharCode(65+c)).join(', ')}</p>
@@ -196,3 +198,77 @@
 
   </main>
 </div>
+
+<style>
+  .animated-title {
+    background: linear-gradient(90deg, #f1f5f9, #60a5fa, #818cf8, #60a5fa, #f1f5f9);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 4s linear infinite;
+  }
+  @keyframes shimmer {
+    0%   { background-position: 0% center; }
+    100% { background-position: 200% center; }
+  }
+
+  /* Option rows — scoped CSS, never purged by Tailwind */
+  .opt-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(71, 85, 105, 0.4);
+    background: rgba(51, 65, 85, 0.4);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .opt-row:hover { border-color: #64748b; }
+
+  .opt-selected {
+    background: rgba(59, 130, 246, 0.2) !important;
+    border-color: #3b82f6 !important;
+  }
+  .opt-correct {
+    background: rgba(16, 185, 129, 0.2) !important;
+    border-color: #10b981 !important;
+  }
+  .opt-wrong {
+    background: rgba(239, 68, 68, 0.2) !important;
+    border-color: #ef4444 !important;
+  }
+
+  .checkbox {
+    width: 20px; height: 20px;
+    border-radius: 4px;
+    border: 2px solid #64748b;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: bold;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .checkbox-on {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+  }
+
+  .radio-btn {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: #475569;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: bold;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .radio-on {
+    background: #3b82f6;
+    color: white;
+  }
+
+  .result-ok  { background: rgba(16,185,129,0.1); border-left: 4px solid #10b981; border-radius: 12px; padding: 16px; }
+  .result-fail{ background: rgba(239,68,68,0.1);  border-left: 4px solid #ef4444;  border-radius: 12px; padding: 16px; }
+</style>

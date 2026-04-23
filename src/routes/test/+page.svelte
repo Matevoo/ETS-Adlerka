@@ -235,24 +235,29 @@
       </div>
 
       <div class="overflow-y-auto p-8">
-        {@const c = resultData.pct >= 90 ? '#10b981' : resultData.pct >= 75 ? '#3b82f6' : resultData.pct >= 50 ? '#f59e0b' : '#ef4444'}
-        {@const msg = resultData.pct >= 90 ? 'Výborný! 🎉' : resultData.pct >= 75 ? 'Dobrý! 👍' : resultData.pct >= 50 ? 'Priemerný 📊' : 'Treba viac trénovať 📚'}
-
         <div class="flex flex-col items-center text-center mb-8">
           <div class="relative w-36 h-36 mb-4">
             <svg class="w-full h-full -rotate-90" viewBox="0 0 100 100">
               <circle cx="50" cy="50" r="42" fill="none" stroke="#334155" stroke-width="10"/>
-              <circle cx="50" cy="50" r="42" fill="none" stroke={c} stroke-width="10"
+              <circle cx="50" cy="50" r="42" fill="none"
+                stroke={resultData.pct >= 90 ? '#10b981' : resultData.pct >= 75 ? '#3b82f6' : resultData.pct >= 50 ? '#f59e0b' : '#ef4444'}
+                stroke-width="10"
                 stroke-dasharray="{2 * Math.PI * 42}"
                 stroke-dashoffset="{2 * Math.PI * 42 * (1 - resultData.pct / 100)}"
                 stroke-linecap="round"/>
             </svg>
             <div class="absolute inset-0 flex flex-col items-center justify-center">
-              <span class="text-4xl font-extrabold" style="color:{c}">{resultData.score}</span>
+              <span class="text-4xl font-extrabold"
+                style="color:{resultData.pct >= 90 ? '#10b981' : resultData.pct >= 75 ? '#3b82f6' : resultData.pct >= 50 ? '#f59e0b' : '#ef4444'}">
+                {resultData.score}
+              </span>
               <span class="text-slate-400">/ {resultData.total}</span>
             </div>
           </div>
-          <p class="text-2xl font-bold" style="color:{c}">{msg}</p>
+          <p class="text-2xl font-bold"
+            style="color:{resultData.pct >= 90 ? '#10b981' : resultData.pct >= 75 ? '#3b82f6' : resultData.pct >= 50 ? '#f59e0b' : '#ef4444'}">
+            {resultData.pct >= 90 ? 'Výborný! 🎉' : resultData.pct >= 75 ? 'Dobrý! 👍' : resultData.pct >= 50 ? 'Priemerný 📊' : 'Treba viac trénovať 📚'}
+          </p>
           <p class="text-slate-400 mt-1">Úspešnosť: <strong class="text-slate-200">{resultData.pct}%</strong></p>
         </div>
 
